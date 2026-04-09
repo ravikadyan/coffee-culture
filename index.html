@@ -270,7 +270,7 @@
 </div>
 
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbyLC4M9LIpWpE-45T8l3OVES6YVSn9S9H1-NGZ4o-koBzrpmp-O90w8_AQvsxo-hYrR/exec';
+const SHEET_URL = 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE';
 
 const categoryImages = {
   "Pizza": [
@@ -859,17 +859,34 @@ function placeOrder() {
   const total = cart.reduce(function(s,c){return s+c.price*c.qty;},0);
   const itemsStr = cart.map(function(c){return c.name + (c.variant?' ('+c.variant+')':'') + ' x' + c.qty;}).join(', ');
 
-  fetch(SHEET_URL, {
-    method: 'POST',
-    mode: 'no-cors',
-    body: JSON.stringify({name:name, phone:phone, table:table, note:note, items:itemsStr, total:total})
-  }).then(function(){
-    recordOrder(table, phone);
-    showSuccess();
-  }).catch(function(){
-    recordOrder(table, phone);
-    showSuccess();
+  // Build GET URL with params (avoids CORS issues with Google Apps Script)
+  const params = new URLSearchParams({
+    action: 'saveOrder',
+    name:  name,
+    phone: phone,
+    table: table,
+    note:  note,
+    items: itemsStr,
+    total: total
   });
+
+  fetch(SHEET_URL + '?' + params.toString())
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.success) {
+        recordOrder(table, phone);
+        showSuccess();
+      } else {
+        btn.disabled = false;
+        btn.innerHTML = 'Place Order';
+        alert('Something went wrong. Please try again.');
+      }
+    })
+    .catch(function() {
+      btn.disabled = false;
+      btn.innerHTML = 'Place Order';
+      alert('Network error. Please check your connection.');
+    });
 }
 
 function showSuccess() {
