@@ -157,7 +157,7 @@
 
 <script>
 var SHEET_URL = 'https://script.google.com/macros/s/AKfycbyLC4M9LIpWpE-45T8l3OVES6YVSn9S9H1-NGZ4o-koBzrpmp-O90w8_AQvsxo-hYrR/exec';
-var OWNER_PASS = '00999';
+var OWNER_PASS = 'coffee2024';
 var allOrders = [];
 var lastCount = 0;
 var calYear = new Date().getFullYear();
@@ -202,19 +202,25 @@ function switchTab(name) {
 }
 
 // FETCH
+var initialLoadDone = false;
+
 function fetchOrders() {
   fetch(SHEET_URL + '?action=getOrders')
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (!data.orders) return;
-      if (lastCount > 0 && data.orders.length > lastCount) {
-        var n = data.orders.length - lastCount;
-        showToast('New order' + (n > 1 ? 's' : '') + ' received!');
+      var newCount = data.orders.length;
+      if (initialLoadDone && newCount > lastCount) {
+        var n = newCount - lastCount;
+        showToast('🔔 ' + n + ' new order' + (n > 1 ? 's' : '') + '!');
         playBeep();
       }
-      lastCount = data.orders.length;
+      lastCount = newCount;
+      initialLoadDone = true;
       allOrders = data.orders;
       renderAll();
+      // Refresh stats if visible
+      if (document.getElementById('tab-stats').classList.contains('active')) renderStats();
       document.getElementById('refreshBar').textContent = 'Updated: ' + new Date().toLocaleTimeString('en-IN') + ' (auto every 6s)';
     })
     .catch(function() {
@@ -295,17 +301,19 @@ function buildOrderCard(o, type) {
 
 // UPDATE STATUS
 function updateStatus(id, status) {
+  // Optimistically update UI immediately
+  var o = allOrders.find(function(x) { return x.id === id; });
+  if (o) { o.status = status; renderAll(); }
+  showToast(status === 'accepted' ? '✅ Order Accepted!' : '✕ Order Rejected');
+
   fetch(SHEET_URL + '?action=updateStatus&id=' + id + '&status=' + status)
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.success) {
-        showToast(status === 'accepted' ? 'Order Accepted!' : 'Order Rejected');
-        fetchOrders();
-      }
+      // Already updated UI, just refresh silently
+      setTimeout(fetchOrders, 2000);
     })
     .catch(function() {
-      var o = allOrders.find(function(x) { return x.id === id; });
-      if (o) { o.status = status; renderAll(); }
+      // UI already updated optimistically
     });
 }
 
@@ -350,12 +358,7 @@ function getFilteredOrders() {
 
   return allOrders.filter(function(o) {
     if (!o.time) return statsFilter === 'all';
-    var rawDate = o.time.split(' ')[0];
-    var parts = rawDate.split('-');
-    var dateKey = '';
-    if (parts.length === 3) {
-      dateKey = parts[0].length === 4 ? parts[2]+'-'+parts[1]+'-'+parts[0] : rawDate;
-    }
+    var dateKey = normalizeDate(o.time);
     if (statsFilter === 'today') return dateKey === todayStr;
     if (statsFilter === 'yesterday') return dateKey === yesterdayStr;
     if (statsFilter === 'week') {
@@ -386,6 +389,36 @@ function sc(n, l, g) {
 }
 
 // CALENDAR
+// Universal date normalizer - handles all formats Google Sheets might return
+function normalizeDate(timeStr) {
+  if (!timeStr || timeStr === '') return '';
+  timeStr = timeStr.toString().trim();
+
+  // Format 1: dd-MM-yyyy HH:mm:ss (our custom format)
+  var m1 = timeStr.match(/^(\d{2})-(\d{2})-(\d{4})/);
+  if (m1) return m1[1] + '-' + m1[2] + '-' + m1[3]; // dd-MM-yyyy
+
+  // Format 2: JavaScript Date string "Sun Oct 04 2026 11:39:42 GMT+0530..."
+  var m2 = timeStr.match(/\w+\s+(\w+)\s+(\d+)\s+(\d{4})/);
+  if (m2) {
+    var months = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',
+                  Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+    var mm = months[m2[1]] || '01';
+    var dd = m2[2].padStart(2,'0');
+    return dd + '-' + mm + '-' + m2[3];
+  }
+
+  // Format 3: yyyy-MM-dd
+  var m3 = timeStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m3) return m3[3] + '-' + m3[2] + '-' + m3[1];
+
+  // Format 4: MM/dd/yyyy
+  var m4 = timeStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m4) return m4[2].padStart(2,'0') + '-' + m4[1].padStart(2,'0') + '-' + m4[3];
+
+  return '';
+}
+
 document.getElementById('prevMonth').addEventListener('click', function() { changeMonth(-1); });
 document.getElementById('nextMonth').addEventListener('click', function() { changeMonth(1); });
 
