@@ -326,7 +326,7 @@
 </div>
 
 <script>
-const SHEET_URL = 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbyLC4M9LIpWpE-45T8l3OVES6YVSn9S9H1-NGZ4o-koBzrpmp-O90w8_AQvsxo-hYrR/exec';
 
 const categoryImages = {
   "Pizza": [
@@ -942,23 +942,37 @@ function placeOrder() {
     total: total
   });
 
-  fetch(SHEET_URL + '?' + params.toString())
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.success) {
+  function attemptOrder(retryCount) {
+    fetch(SHEET_URL + '?' + params.toString(), { mode: 'cors' })
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function(data) {
         recordOrder(table, phone);
         showSuccess();
-      } else {
-        btn.disabled = false;
-        btn.innerHTML = 'Place Order';
-        alert('Something went wrong. Please try again.');
-      }
-    })
-    .catch(function() {
-      btn.disabled = false;
-      btn.innerHTML = 'Place Order';
-      alert('Network error. Please check your connection.');
-    });
+      })
+      .catch(function(err) {
+        if (retryCount > 0) {
+          // Retry after 1.5s
+          setTimeout(function() { attemptOrder(retryCount - 1); }, 1500);
+        } else {
+          // Last resort - try no-cors (fire and forget)
+          fetch(SHEET_URL + '?' + params.toString(), { mode: 'no-cors' })
+            .then(function() {
+              recordOrder(table, phone);
+              showSuccess();
+            })
+            .catch(function() {
+              btn.disabled = false;
+              btn.innerHTML = 'Place Order';
+              alert('Could not connect. Please check your internet and try again.');
+            });
+        }
+      });
+  }
+
+  attemptOrder(2); // try up to 3 times
 }
 
 function showSuccess() {
