@@ -389,6 +389,34 @@ function sc(n, l, g) {
 }
 
 // CALENDAR
+// Format time for display - converts any format to clean IST string
+function formatTime(timeStr) {
+  if (!timeStr) return '';
+  timeStr = timeStr.toString().trim();
+
+  // Already in our clean format: dd-MM-yyyy HH:mm:ss
+  var m1 = timeStr.match(/^(\d{2})-(\d{2})-(\d{4}) (\d{2}:\d{2})/);
+  if (m1) return m1[1] + '-' + m1[2] + '-' + m1[3] + ' ' + m1[4];
+
+  // JS Date string like "Sun Oct 04 2026 11:39:42 GMT+0530..."
+  // Parse it and format nicely
+  try {
+    var d = new Date(timeStr);
+    if (!isNaN(d.getTime())) {
+      // Convert to IST (UTC+5:30)
+      var ist = new Date(d.getTime() + (5.5 * 60 * 60 * 1000));
+      var dd = String(ist.getUTCDate()).padStart(2,'0');
+      var mm = String(ist.getUTCMonth()+1).padStart(2,'0');
+      var yyyy = ist.getUTCFullYear();
+      var hh = String(ist.getUTCHours()).padStart(2,'0');
+      var min = String(ist.getUTCMinutes()).padStart(2,'0');
+      return dd + '-' + mm + '-' + yyyy + ' ' + hh + ':' + min;
+    }
+  } catch(e) {}
+
+  return timeStr;
+}
+
 // Universal date normalizer - handles all formats Google Sheets might return
 function normalizeDate(timeStr) {
   if (!timeStr || timeStr === '') return '';
