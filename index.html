@@ -656,7 +656,7 @@ function renderMenu() {
 
       if (item.sizes) {
         // PIZZA / SIZED ITEMS
-        const selSize = selectedSizes[key] || 'M';
+        const selSize = selectedSizes[key] || 'R';
         const price = item.sizes[selSize];
         const sizeBtns = Object.entries(item.sizes).map(function(e) {
           const s = e[0], p = e[1];
