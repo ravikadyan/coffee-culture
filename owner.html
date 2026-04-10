@@ -93,6 +93,14 @@
   .login-input:focus { border-color: #1a1a1a; }
   .login-btn { width: 100%; padding: 12px; background: #1a1a1a; color: #fff; border: none; border-radius: 10px; font-size: 0.95rem; font-weight: 700; cursor: pointer; font-family: "Poppins", sans-serif; }
   .login-err { color: #e74c3c; font-size: 0.82rem; margin-top: 10px; min-height: 20px; }
+  .stat-filter-btn {
+    padding: 7px 16px; border-radius: 20px;
+    border: 1.5px solid #e0e0e0; background: #fff;
+    font-size: 0.8rem; font-weight: 600; color: #888;
+    cursor: pointer; font-family: "Poppins", sans-serif;
+    transition: all 0.15s;
+  }
+  .stat-filter-btn.active { background: #1a1a1a; color: #e8a045; border-color: #1a1a1a; }
 </style>
 </head>
 <body>
@@ -148,8 +156,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-var SHEET_URL = 'https://script.google.com/macros/s/AKfycbyLC4M9LIpWpE-45T8l3OVES6YVSn9S9H1-NGZ4o-koBzrpmp-O90w8_AQvsxo-hYrR/exec';
-var OWNER_PASS = '12345';
+var SHEET_URL = 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE';
+var OWNER_PASS = 'coffee2024';
 var allOrders = [];
 var lastCount = 0;
 var calYear = new Date().getFullYear();
@@ -302,15 +310,77 @@ function updateStatus(id, status) {
 }
 
 // STATS
+var statsFilter = 'today';
+
 function renderStats() {
-  var revenue = allOrders.filter(function(o) { return o.status !== 'rejected'; })
+  var tab = document.getElementById('tab-stats');
+
+  // Build date filter UI if not already there
+  if (!document.getElementById('statsFilterBar')) {
+    var filterHTML = '<div id="statsFilterBar" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">' +
+      '<button class="stat-filter-btn active" id="sf-today">Today</button>' +
+      '<button class="stat-filter-btn" id="sf-yesterday">Yesterday</button>' +
+      '<button class="stat-filter-btn" id="sf-week">This Week</button>' +
+      '<button class="stat-filter-btn" id="sf-all">All Time</button>' +
+      '</div><div class="stats-grid" id="statsGrid"></div>';
+    tab.innerHTML = filterHTML;
+    document.getElementById('sf-today').addEventListener('click', function(){ setStatsFilter('today', this); });
+    document.getElementById('sf-yesterday').addEventListener('click', function(){ setStatsFilter('yesterday', this); });
+    document.getElementById('sf-week').addEventListener('click', function(){ setStatsFilter('week', this); });
+    document.getElementById('sf-all').addEventListener('click', function(){ setStatsFilter('all', this); });
+  }
+
+  var filtered = getFilteredOrders();
+  var revenue = filtered.filter(function(o) { return o.status !== 'rejected'; })
     .reduce(function(s, o) { return s + parseInt(o.total || 0); }, 0);
+  var accepted = filtered.filter(function(o) { return o.status !== 'rejected'; }).length;
+
   document.getElementById('statsGrid').innerHTML =
-    sc(allOrders.length, 'Total Orders', false) +
-    sc('Rs ' + revenue, 'Total Revenue', true) +
-    sc(allOrders.filter(function(o){return o.status==='pending';}).length, 'Pending Now', false) +
-    sc(allOrders.filter(function(o){return o.status==='accepted';}).length, 'Preparing', false);
+    sc(accepted, 'Orders', false) +
+    sc('Rs ' + revenue, 'Revenue', true) +
+    sc(filtered.filter(function(o){return o.status==='pending';}).length, 'Pending', false) +
+    sc(filtered.filter(function(o){return o.status==='rejected';}).length, 'Rejected', false);
 }
+
+function getFilteredOrders() {
+  var now = new Date();
+  var todayStr = pad(now.getDate()) + '-' + pad(now.getMonth()+1) + '-' + now.getFullYear();
+  var yest = new Date(now); yest.setDate(yest.getDate()-1);
+  var yesterdayStr = pad(yest.getDate()) + '-' + pad(yest.getMonth()+1) + '-' + yest.getFullYear();
+
+  return allOrders.filter(function(o) {
+    if (!o.time) return statsFilter === 'all';
+    var rawDate = o.time.split(' ')[0];
+    var parts = rawDate.split('-');
+    var dateKey = '';
+    if (parts.length === 3) {
+      dateKey = parts[0].length === 4 ? parts[2]+'-'+parts[1]+'-'+parts[0] : rawDate;
+    }
+    if (statsFilter === 'today') return dateKey === todayStr;
+    if (statsFilter === 'yesterday') return dateKey === yesterdayStr;
+    if (statsFilter === 'week') {
+      var orderDate = parseDate(dateKey);
+      var weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate()-7);
+      return orderDate >= weekAgo;
+    }
+    return true; // all
+  });
+}
+
+function parseDate(ddmmyyyy) {
+  var p = ddmmyyyy.split('-');
+  return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+}
+
+function pad(n) { return String(n).padStart(2,'0'); }
+
+function setStatsFilter(filter, btn) {
+  statsFilter = filter;
+  document.querySelectorAll('.stat-filter-btn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  renderStats();
+}
+
 function sc(n, l, g) {
   return '<div class="stat-card"><div class="stat-num' + (g ? ' gold' : '') + '">' + n + '</div><div class="stat-label">' + l + '</div></div>';
 }
