@@ -203,6 +203,7 @@ function switchTab(name) {
 
 // FETCH
 var initialLoadDone = false;
+var knownOrderIds = new Set();
 
 function fetchOrders() {
   fetch(SHEET_URL + '?action=getOrders')
@@ -210,11 +211,18 @@ function fetchOrders() {
     .then(function(data) {
       if (!data.orders) return;
       var newCount = data.orders.length;
-      if (initialLoadDone && newCount > lastCount) {
-        var n = newCount - lastCount;
-        showToast('🔔 ' + n + ' new order' + (n > 1 ? 's' : '') + '!');
-        playBeep();
+      if (initialLoadDone) {
+        // Only notify for truly new order IDs we haven't seen before
+        var newOrders = data.orders.filter(function(o) {
+          return o.status === 'pending' && !knownOrderIds.has(o.id);
+        });
+        if (newOrders.length > 0) {
+          showToast('🔔 ' + newOrders.length + ' new order' + (newOrders.length > 1 ? 's' : '') + '!');
+          playBeep();
+        }
       }
+      // Update known IDs
+      data.orders.forEach(function(o) { knownOrderIds.add(o.id); });
       lastCount = newCount;
       initialLoadDone = true;
       allOrders = data.orders;
